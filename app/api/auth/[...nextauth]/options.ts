@@ -28,8 +28,7 @@ export const CredentialType = {
 };
 
 export const options: AuthOptions = {
-  // @ts-ignore
-  adapter: MongoDBAdapter(clientPromise as Promise<MongoClient>),
+  adapter: MongoDBAdapter(clientPromise, {}) as AuthOptions['adapter'],
 
   pages: {
     signIn: '/signin',
@@ -94,11 +93,7 @@ export const options: AuthOptions = {
             .lean()
             .exec();
 
-          // console.log(credentials);
-
-          // console.log(credentials?.type);
           if (credentials?.type === CredentialType.signIn) {
-            // await handleSignin(foundUser, credentials);
             return handleSignin(foundUser, credentials);
           } else if (credentials?.type === CredentialType.signUp) {
             return handleSignup(foundUser, credentials);
@@ -126,10 +121,9 @@ export const options: AuthOptions = {
 
       async sendVerificationRequest(params) {
         try {
-          const { identifier, url, provider, theme } = params;
+          const { identifier, url, provider, theme, token } = params;
           const { host } = new URL(url);
 
-          // NOTE: You are not required to use `nodemailer`, use whatever you want.
           const transport = createTransport(provider.server);
 
           const result = await transport.sendMail({
@@ -155,16 +149,23 @@ export const options: AuthOptions = {
 
   callbacks: {
     async jwt({ token, user }) {
+      console.log('jwt');
       if (user) token.role = user.role;
       return token;
     },
 
-    async session({ session, token }) {
+    async session({ session, token, user }) {
       if (session?.user && session?.user?.role) session.user.role = token.role;
+
+      if (session?.user && user?.emailVerified)
+        session.user.role = 'Email User';
+
       return session;
     },
 
-    async signIn({ user, account, email }) {
+    async signIn({ user, account, email, credentials, profile }) {
+      user = { ...user, role: 'Email User' };
+
       const userExists = await User.findOne({
         email: user.email, //the user object has an email property, which contains the email the user entered.
       });
